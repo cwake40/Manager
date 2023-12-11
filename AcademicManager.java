@@ -5,14 +5,13 @@ import java.io.FileNotFoundException;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.Iterator;
 import java.util.Scanner;
 
 public class AcademicManager {
 
     private int maxCoursesAllowed;
-    private HashMap<String, HashMap<Integer, Course>> subjectCatalog;
-    private HashMap<String, Student> studentDirectory;
+    private HashMap<String, HashMap<Integer, AcademicSubject>> subjectCatalog;
+    private HashMap<String, UniversityLearner> studentDirectory;
 
     public AcademicManager(int maxCourses) {
         maxCoursesAllowed = maxCourses < 1 ? 1 : maxCourses;
@@ -29,9 +28,9 @@ public class AcademicManager {
             subjectCatalog.put(department, new HashMap<>());
         }
 
-        HashMap<Integer, Course> departmentCourses = subjectCatalog.get(department);
-        if (!departmentCourses.containsKey(courseNumber)) {
-            departmentCourses.put(courseNumber, new Course(department, courseNumber, seatCount, maxCoursesAllowed));
+        HashMap<Integer, AcademicSubject> departmentSubjects = subjectCatalog.get(department);
+        if (!departmentSubjects.containsKey(courseNumber)) {
+            departmentSubjects.put(courseNumber, new AcademicSubject(department, courseNumber, seatCount, maxCoursesAllowed));
         }
 
         return this;
@@ -43,7 +42,7 @@ public class AcademicManager {
         }
 
         if (subjectCatalog.containsKey(department) && subjectCatalog.get(department).containsKey(courseNumber)) {
-            subjectCatalog.get(department).remove(courseNumber).clearSubject();
+            subjectCatalog.get(department).remove(courseNumber).clearSubjectEnrollments();
             return true;
         }
 
@@ -59,41 +58,41 @@ public class AcademicManager {
             throw new IllegalArgumentException("Invalid enrollment parameters");
         }
 
-        Course course = getCourse(department, courseNumber);
-        if (course == null || course.isFull() || course.hasStudent(firstName, lastName)) {
+        AcademicSubject subject = getSubject(department, courseNumber);
+        if (subject == null || subject.isSubjectFull() || subject.isStudentEnrolled(firstName, lastName)) {
             return false;
         }
 
         String studentKey = firstName + lastName;
-        Student student = studentDirectory.computeIfAbsent(studentKey, k -> new Student(firstName, lastName, maxCoursesAllowed));
-        if (!student.canEnrollInAnotherCourse()) {
+        UniversityLearner learner = studentDirectory.computeIfAbsent(studentKey, k -> new UniversityLearner(firstName, lastName, maxCoursesAllowed));
+        if (!learner.canEnrollInAnotherCourse()) {
             return false;
         }
 
-        course.addStudent(studentKey, student);
-        student.enrollInCourse();
+        subject.registerStudent(studentKey, learner);
+        learner.enrollInCourse();
         return true;
     }
 
     public int countStudentsInSubject(String department, int courseNumber) {
-        Course course = getCourse(department, courseNumber);
-        return course != null ? course.getStudentCount() : 0;
+        AcademicSubject subject = getSubject(department, courseNumber);
+        return subject != null ? subject.countEnrolledStudents() : 0;
     }
 
     public int countStudentsWithLastName(String department, int courseNumber, String lastName) {
-        Course course = getCourse(department, courseNumber);
-        return course != null ? course.countStudentsByLastName(lastName) : 0;
+        AcademicSubject subject = getSubject(department, courseNumber);
+        return subject != null ? subject.countStudentsByLastName(lastName) : 0;
     }
 
     public boolean isStudentEnrolled(String department, int courseNumber, String firstName, String lastName) {
-        Course course = getCourse(department, courseNumber);
-        return course != null && course.hasStudent(firstName, lastName);
+        AcademicSubject subject = getSubject(department, courseNumber);
+        return subject != null && subject.isStudentEnrolled(firstName, lastName);
     }
 
     public int countCoursesStudentEnrolled(String firstName, String lastName) {
         return (int) subjectCatalog.values().stream()
             .flatMap(map -> map.values().stream())
-            .filter(course -> course.hasStudent(firstName, lastName))
+            .filter(subject -> subject.isStudentEnrolled(firstName, lastName))
             .count();
     }
 
@@ -102,12 +101,12 @@ public class AcademicManager {
             throw new IllegalArgumentException("Invalid withdrawal parameters");
         }
 
-        Course course = getCourse(department, courseNumber);
-        if (course == null || !course.hasStudent(firstName, lastName)) {
+        AcademicSubject subject = getSubject(department, courseNumber);
+        if (subject == null || !subject.isStudentEnrolled(firstName, lastName)) {
             return false;
         }
 
-        course.removeStudent(firstName + lastName);
+        subject.unregisterStudent(firstName + lastName);
         studentDirectory.get(firstName + lastName).withdrawFromCourse();
         return true;
     }
@@ -118,9 +117,9 @@ public class AcademicManager {
         }
 
         boolean removed = false;
-        for (HashMap<Integer, Course> department : subjectCatalog.values()) {
-            for (Course course : department.values()) {
-                if (course.removeStudent(firstName + lastName)) {
+        for (HashMap<Integer, AcademicSubject> department : subjectCatalog.values()) {
+            for (AcademicSubject subject : department.values()) {
+                if (subject.unregisterStudent(firstName + lastName)) {
                     studentDirectory.get(firstName + lastName).withdrawFromCourse();
                     removed = true;
                 }
@@ -135,11 +134,9 @@ public class AcademicManager {
                firstName == null || firstName.isEmpty() || lastName == null || lastName.isEmpty();
     }
 
-    private Course getCourse(String department, int courseNumber) {
+    private AcademicSubject getSubject(String department, int courseNumber) {
         return subjectCatalog.containsKey(department) ? subjectCatalog.get(department).get(courseNumber) : null;
     }
-
-    
 
     public void processRegistrations(Collection<String> fileNames) {
         HashSet<Thread> threads = new HashSet<>();
@@ -202,4 +199,3 @@ public class AcademicManager {
         }
     }
 }
-
